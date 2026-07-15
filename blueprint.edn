@@ -1,0 +1,39 @@
+{:itonami.blueprint/id "cloud-itonami-isic-2219"
+ :itonami.blueprint/name "Manufacture of Other Rubber Products"
+ :itonami.blueprint/isic-rev5 "2219"
+ :itonami.blueprint/domain :manufacturing/rubber-products
+ :itonami.blueprint/license "AGPL-3.0-or-later"
+ :itonami.blueprint/social-impact [:product-safety :supply-resilience :industrial-jobs]
+ :itonami.blueprint/governor :compression-seal-governor
+ :itonami.blueprint/robotics true
+ :itonami.blueprint/required-technologies [:robotics :cae :dmn :bpmn :audit-ledger]
+ :itonami.blueprint/optional-technologies [:cfd :telemetry :optimization]
+ :itonami.blueprint/status :public-oss
+ :itonami.blueprint/maturity :implemented
+ :itonami.blueprint/implemented-slice
+ "Rubber Advisor (contained-intelligence proposal node) ⊣ Compression-Seal
+ Governor (independent censor). Entity is a rubber-part-batch (a
+ manufactured lot of molded/extruded rubber parts of one compound/spec,
+ either an electronics/consumer gasket-and-case batch or an automotive
+ rubber-component batch). Six ops: :rubber-part-batch/intake (directory
+ patch normalize, phase-3 auto-eligible when clean, the only auto op in
+ this domain) -> :material-spec-rules/verify (per-product-class evidence
+ checklist against rubberworks.facts's AUTOMOTIVE-RUBBER/ELECTRONICS-
+ GASKET catalog -- ASTM D2000 + ISO 1817 for automotive, IEC 60529 + ASTM
+ D395 for electronics/consumer, never auto) -> :end-of-line-quality/screen
+ (dimensional/porosity/flash defect screen, evaluated unconditionally,
+ HARD hold if unresolved) -> :robotics/simulate-compression-set-test (a
+ REAL physics-2d time-stepped ASTM D395 Method B compression-set/
+ compression-force test simulation deriving :sim-peak-compression-force-n
+ from the actual simulated collision impulse, never auto) -> dual
+ actuation, BOTH always escalate to a human and both HARD-hold on a
+ fabricated spec-basis, incomplete evidence, a missing or independently
+ out-of-tolerance (over- or under-compressed) compression-force
+ simulation, an out-of-band durometer (Shore A hardness) deviation
+ ground-truth recheck, an unresolved end-of-line defect, or a double
+ actuation: :actuation/ship-rubber-part-batch (dispatches onward to
+ cloud-itonami-isic-2630 for smartphone protective-case/gasket compounds
+ or cloud-itonami-isic-2910/cloud-itonami-isic-2920 for automotive
+ weatherstripping/hose/mount compounds) and :actuation/issue-material-
+ certificate (Rubber Compound Test Certificate: ASTM D2000/D395
+ conformance report + safety compliance)."}
