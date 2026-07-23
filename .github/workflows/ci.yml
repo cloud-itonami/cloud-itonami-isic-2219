@@ -3,8 +3,10 @@ name: ci
 # Kept correct and ready for when Actions are enabled on the org.
 # Until then: run locally with `clojure -M:lint` and `clojure -M:dev:test`.
 #
-# Workspace layout: deps use :local/root to kotoba-lang/langgraph and
-# kotoba-lang/langchain (public). CI reconstructs sibling paths.
+# Workspace layout: deps use :local/root to kotoba-lang/langgraph,
+# kotoba-lang/robotics (which itself needs kotoba-lang/html +
+# kotoba-lang/css), kotoba-lang/langchain and kotoba-lang/langchain-store
+# (all public). CI reconstructs sibling paths.
 
 on:
   push:
@@ -39,8 +41,20 @@ jobs:
           path: orgs/kotoba-lang/robotics
       - uses: actions/checkout@v4
         with:
+          repository: kotoba-lang/html
+          path: orgs/kotoba-lang/html
+      - uses: actions/checkout@v4
+        with:
+          repository: kotoba-lang/css
+          path: orgs/kotoba-lang/css
+      - uses: actions/checkout@v4
+        with:
           repository: kotoba-lang/langchain
           path: orgs/kotoba-lang/langchain
+      - uses: actions/checkout@v4
+        with:
+          repository: kotoba-lang/langchain-store
+          path: orgs/kotoba-lang/langchain-store
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: "21" }
       - uses: DeLaGuardo/setup-clojure@13.0
