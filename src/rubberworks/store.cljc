@@ -36,10 +36,9 @@
   immutable log -- the audit trail a community trusting a rubber-
   products manufacturer needs, and the evidence a plant needs if a
   shipment or certificate decision is later disputed."
-  (:require #?(:clj  [clojure.edn :as edn]
-               :cljs [cljs.reader :as edn])
-            [rubberworks.registry :as registry]
+  (:require [rubberworks.registry :as registry]
             [rubberworks.robotics :as robotics]
+            [langchain-store.core :as ls]
             [langchain.db :as d]))
 
 (defprotocol Store
@@ -303,9 +302,6 @@
    :shipment-sequence/jurisdiction    {:db/unique :db.unique/identity}
    :certificate-sequence/jurisdiction {:db/unique :db.unique/identity}})
 
-(defn- enc [v] (pr-str v))
-(defn- dec* [s] (when s (edn/read-string s)))
-
 (defn- batch->tx [{:keys [id batch-name product-class
                           compression-platen-mass-kg sim-peak-compression-force-n
                           compression-force-min-n compression-force-max-n
@@ -327,7 +323,7 @@
     durometer-deviation-max-shore-a                     (assoc :rubber-part-batch/durometer-deviation-max-shore-a durometer-deviation-max-shore-a)
     (some? rubber-part-batch-defect-unresolved?)        (assoc :rubber-part-batch/defect-unresolved? rubber-part-batch-defect-unresolved?)
     (some? robotics-sim-verified?)                      (assoc :rubber-part-batch/robotics-sim-verified? robotics-sim-verified?)
-    (some? robotics-sim-record)                         (assoc :rubber-part-batch/robotics-sim-record (enc robotics-sim-record))
+    (some? robotics-sim-record)                         (assoc :rubber-part-batch/robotics-sim-record (ls/enc robotics-sim-record))
     (some? rubber-part-batch-shipped?)                  (assoc :rubber-part-batch/shipped? rubber-part-batch-shipped?)
     (some? material-certified?)                         (assoc :rubber-part-batch/certified? material-certified?)
     jurisdiction                                        (assoc :rubber-part-batch/jurisdiction jurisdiction)
@@ -360,7 +356,7 @@
      :durometer-deviation-max-shore-a (:rubber-part-batch/durometer-deviation-max-shore-a m)
      :rubber-part-batch-defect-unresolved? (boolean (:rubber-part-batch/defect-unresolved? m))
      :robotics-sim-verified? (boolean (:rubber-part-batch/robotics-sim-verified? m))
-     :robotics-sim-record (dec* (:rubber-part-batch/robotics-sim-record m))
+     :robotics-sim-record (ls/dec* (:rubber-part-batch/robotics-sim-record m))
      :rubber-part-batch-shipped? (boolean (:rubber-part-batch/shipped? m))
      :material-certified? (boolean (:rubber-part-batch/certified? m))
      :jurisdiction (:rubber-part-batch/jurisdiction m) :status (:rubber-part-batch/status m)
@@ -375,25 +371,25 @@
          (map #(pull->batch (d/pull (d/db conn) batch-pull [:rubber-part-batch/id %])))
          (sort-by :id)))
   (eol-screen-of [_ id]
-    (dec* (d/q '[:find ?p . :in $ ?aid
+    (ls/dec* (d/q '[:find ?p . :in $ ?aid
                 :where [?k :eol-screen/batch-id ?aid] [?k :eol-screen/payload ?p]]
               (d/db conn) id)))
   (material-spec-verification-of [_ batch-id]
-    (dec* (d/q '[:find ?p . :in $ ?aid
+    (ls/dec* (d/q '[:find ?p . :in $ ?aid
                 :where [?a :verification/batch-id ?aid] [?a :verification/payload ?p]]
               (d/db conn) batch-id)))
   (ledger [_]
     (->> (d/q '[:find ?s ?f :where [?e :ledger/seq ?s] [?e :ledger/fact ?f]] (d/db conn))
          (sort-by first)
-         (mapv (comp dec* second))))
+         (mapv (comp ls/dec* second))))
   (shipment-history [_]
     (->> (d/q '[:find ?s ?r :where [?e :shipment/seq ?s] [?e :shipment/record ?r]] (d/db conn))
          (sort-by first)
-         (mapv (comp dec* second))))
+         (mapv (comp ls/dec* second))))
   (certificate-history [_]
     (->> (d/q '[:find ?s ?r :where [?e :certificate/seq ?s] [?e :certificate/record ?r]] (d/db conn))
          (sort-by first)
-         (mapv (comp dec* second))))
+         (mapv (comp ls/dec* second))))
   (next-shipment-sequence [_ jurisdiction]
     (or (d/q '[:find ?n . :in $ ?j
               :where [?e :shipment-sequence/jurisdiction ?j] [?e :shipment-sequence/next ?n]]
@@ -414,10 +410,10 @@
       (d/transact! conn [(batch->tx value)])
 
       :material-spec-verification/set
-      (d/transact! conn [{:verification/batch-id (first path) :verification/payload (enc payload)}])
+      (d/transact! conn [{:verification/batch-id (first path) :verification/payload (ls/enc payload)}])
 
       :eol-screen/set
-      (d/transact! conn [{:eol-screen/batch-id (first path) :eol-screen/payload (enc payload)}])
+      (d/transact! conn [{:eol-screen/batch-id (first path) :eol-screen/payload (ls/enc payload)}])
 
       :rubber-part-batch/mark-shipped
       (let [batch-id (first path)
@@ -427,7 +423,7 @@
         (d/transact! conn
                      [(batch->tx (assoc batch-patch :id batch-id))
                       {:shipment-sequence/jurisdiction jurisdiction :shipment-sequence/next next-n}
-                      {:shipment/seq (count (shipment-history s)) :shipment/record (enc (get result "record"))}])
+                      {:shipment/seq (count (shipment-history s)) :shipment/record (ls/enc (get result "record"))}])
         result)
 
       :rubber-part-batch/mark-certified
@@ -438,12 +434,12 @@
         (d/transact! conn
                      [(batch->tx (assoc batch-patch :id batch-id))
                       {:certificate-sequence/jurisdiction jurisdiction :certificate-sequence/next next-n}
-                      {:certificate/seq (count (certificate-history s)) :certificate/record (enc (get result "record"))}])
+                      {:certificate/seq (count (certificate-history s)) :certificate/record (ls/enc (get result "record"))}])
         result)
       nil)
     s)
   (append-ledger! [s fact]
-    (d/transact! conn [{:ledger/seq (count (ledger s)) :ledger/fact (enc fact)}])
+    (d/transact! conn [{:ledger/seq (count (ledger s)) :ledger/fact (ls/enc fact)}])
     fact)
   (with-rubber-part-batches [s batches]
     (when (seq batches) (d/transact! conn (mapv batch->tx (vals batches)))) s))
