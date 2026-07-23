@@ -10,6 +10,8 @@
         {:local/root "../../kotoba-lang/langgraph"}
         io.github.kotoba-lang/robotics
         {:local/root "../../kotoba-lang/robotics"}
+        io.github.kotoba-lang/langchain-store
+        {:local/root "../../kotoba-lang/langchain-store"}
         ;; REAL engineering-simulation dependency (ADR-2607151600/
         ;; ADR-2607152000's real-physics fleet pattern, delivered NATIVELY
         ;; from day one -- mirroring cloud-itonami-isic-2220/-2630/-2920/
