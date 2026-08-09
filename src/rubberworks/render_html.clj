@@ -1,0 +1,309 @@
+(ns rubberworks.render-html
+  "Build-time HTML renderer for `docs/samples/operator-console.html`.
+
+  Closes flagship checklist item 2 (com-junkawasaki/root ADR-2607189300,
+  Wave5 rollout template: `90-docs/business/cloud-itonami-flagship-
+  generator-template.edn`). This repo previously had a HAND-AUTHORED
+  `docs/samples/operator-console.html` (a static snapshot of batch
+  labels and disposition prose, never regenerated from a live actor
+  run). This namespace REPLACES that with a genuine build-time generator
+  that drives the REAL actor stack (`rubberworks.operation` ->
+  `rubberworks.governor` -> `rubberworks.store`) through a scenario
+  adapted from this repo's own `rubberworks.sim` demo driver
+  (`clojure -M:dev:run`, confirmed by reading the driver directly --
+  its ids (batch-1..6), ops and violation rule names all match
+  `rubberworks.store/demo-data`'s real seed data and
+  `rubberworks.governor`'s real check functions; unlike
+  `cloud-itonami-isic-851`'s known-bad `schoolops.sim`, this repo's own
+  sim driver was safe to mine directly rather than author from
+  scratch), trimmed to a representative subset (one full phase-3-auto
+  intake + five always-escalate/phase-escalate -> approve lifecycles
+  building batch-1 up to a real rubber-part-batch shipment + Rubber
+  Compound Test Certificate, and five distinct HARD-hold reasons that
+  never reach a human) and rendered deterministically -- no invented
+  numbers, no timestamps in the page content, byte-identical across
+  reruns against the same seed (verify by diffing two consecutive runs
+  before shipping). The `:robotics-simulation-out-of-tolerance` hold
+  below is driven by a REAL `physics-2d`-stepped simulation result
+  (batch-5's own recorded 5.0kg `:compression-platen-mass-kg`
+  genuinely produces a 1600.0 N peak compression force against the
+  1200.0 N ceiling, `rubberworks.robotics`/ADR-2607151600/ADR-
+  2607152000) -- not a hand-typed number.
+
+  Usage: `clojure -M:dev:render-html [out-file]`
+  (default `docs/samples/operator-console.html`)."
+  (:require [jp-go-dds.skin]
+            [clojure.string :as str]
+            [rubberworks.store :as store]
+            [rubberworks.operation :as op]
+            [langgraph.graph :as g]))
+
+;; ----------------------------- harness (unchanged across every repo
+;; in this cluster -- do not rewrite, only copy) -----------------------
+
+(def ^:private operator
+  {:actor-id "op-1" :actor-role :quality-engineer :phase 3})
+
+(defn- exec! [actor tid request]
+  (g/run* actor {:request request :context operator} {:thread-id tid}))
+
+(defn- approve! [actor tid]
+  (g/run* actor {:approval {:status :approved :by "op-1"}}
+          {:thread-id tid :resume? true}))
+
+(defn run-demo!
+  "Runs a fresh seeded store through a scenario mixing every disposition
+  this actor can reach:
+
+  Clean path:
+    - batch-1 `:rubber-part-batch/intake` normalizes the batch record
+      (governor-clean, high confidence, phase-3 `:auto` -- the ONLY op
+      in `rubberworks.phase`'s phase-3 auto set -- auto-commits, no
+      human).
+
+  Escalate -> approve lifecycles (building batch-1 up to a real
+  shipment + Rubber Compound Test Certificate):
+    - batch-1 `:material-spec-rules/verify` drafts the ELECTRONICS-
+      GASKET evidence checklist (governor-clean, but not in any
+      phase's `:auto` set -- escalates on `:phase-approval`, approved).
+    - batch-1 `:end-of-line-quality/screen` finds no unresolved defect
+      (governor-clean -- escalates, approved).
+    - batch-1 `:robotics/simulate-compression-set-test` runs the REAL
+      ASTM D395 compression-set-test-cell `physics-2d` mission (passes
+      -- escalates, approved).
+    - batch-1 `:actuation/ship-rubber-part-batch` is ALWAYS high-stakes
+      per `rubberworks.governor/high-stakes`, regardless of confidence
+      -- escalates, approved by a human quality engineer, commits a
+      real rubber-part-batch-shipment draft.
+    - batch-1 `:actuation/issue-material-certificate` is likewise
+      ALWAYS high-stakes -- escalates, approved, commits a real Rubber
+      Compound Test Certificate draft.
+
+  HARD-hold paths (never reach a human, five distinct real governor
+  rules from `rubberworks.governor`):
+    - batch-2 `:material-spec-rules/verify` with `:no-spec?` proposes
+      against jurisdiction \"MEDDEV-RUBBER\", which has no entry in
+      `rubberworks.facts/catalog` -> `:no-spec-basis`.
+    - batch-4 `:end-of-line-quality/screen` -- batch-4's own seed
+      record carries `:rubber-part-batch-defect-unresolved? true` ->
+      `:end-of-line-defect-unresolved`.
+    - batch-3 `:actuation/ship-rubber-part-batch` after a clean
+      material-spec verify + robotics mission -- batch-3's own
+      recorded durometer deviation (6.0 shore-A) falls outside its
+      own [-3,3] band -> `:rubber-part-batch-durometer-deviation-out-
+      of-range` (independent recompute; never trusts a proposal report).
+    - batch-5 `:actuation/ship-rubber-part-batch` after material-spec
+      verify -- batch-5's own recorded 5.0kg platen mass produces a
+      REAL `physics-2d` 1600.0 N peak against the 1200.0 N ceiling
+      even though `:robotics-sim-verified?` was seeded `true` ('already
+      on file' never overrides the independent recheck) ->
+      `:robotics-simulation-out-of-tolerance`.
+    - batch-1 `:actuation/ship-rubber-part-batch` AGAIN, after it
+      already shipped above -> `:already-shipped`, off the dedicated
+      `:rubber-part-batch-shipped?` fact (never a `:status` value).
+
+  Returns the resulting store -- every field `render` below reads is
+  real governor/store output, not a hand-typed copy."
+  []
+  (let [db (store/seed-db)
+        actor (op/build db)]
+
+    (exec! actor "t1-intake"
+           {:op :rubber-part-batch/intake :subject "batch-1"
+            :patch {:id "batch-1" :batch-name "Meridian Waterproofing Gasket Batch RG-4401"}})
+
+    (exec! actor "t2-verify" {:op :material-spec-rules/verify :subject "batch-1"})
+    (approve! actor "t2-verify")
+
+    (exec! actor "t3-screen" {:op :end-of-line-quality/screen :subject "batch-1"})
+    (approve! actor "t3-screen")
+
+    (exec! actor "t4-robotics" {:op :robotics/simulate-compression-set-test :subject "batch-1"})
+    (approve! actor "t4-robotics")
+
+    (exec! actor "t5-ship" {:op :actuation/ship-rubber-part-batch :subject "batch-1"})
+    (approve! actor "t5-ship")
+
+    (exec! actor "t6-cert" {:op :actuation/issue-material-certificate :subject "batch-1"})
+    (approve! actor "t6-cert")
+
+    (exec! actor "t7-no-spec-basis"
+           {:op :material-spec-rules/verify :subject "batch-2" :no-spec? true})
+
+    (exec! actor "t8-eol-unresolved"
+           {:op :end-of-line-quality/screen :subject "batch-4"})
+
+    (exec! actor "t9-batch3-verify" {:op :material-spec-rules/verify :subject "batch-3"})
+    (approve! actor "t9-batch3-verify")
+    (exec! actor "t9b-batch3-robotics" {:op :robotics/simulate-compression-set-test :subject "batch-3"})
+    (approve! actor "t9b-batch3-robotics")
+    (exec! actor "t9c-durometer-out-of-range"
+           {:op :actuation/ship-rubber-part-batch :subject "batch-3"})
+
+    (exec! actor "t10-batch5-verify" {:op :material-spec-rules/verify :subject "batch-5"})
+    (approve! actor "t10-batch5-verify")
+    (exec! actor "t10b-robotics-out-of-tolerance"
+           {:op :actuation/ship-rubber-part-batch :subject "batch-5"})
+
+    (exec! actor "t11-already-shipped"
+           {:op :actuation/ship-rubber-part-batch :subject "batch-1"})
+
+    db))
+
+;; ----------------------------- rendering -----------------------------
+
+(defn- esc [v]
+  (-> (str v)
+      (str/replace "&" "&amp;")
+      (str/replace "<" "&lt;")
+      (str/replace ">" "&gt;")))
+
+(defn- last-fact-for
+  "Every op in this domain keys its ledger fact's `:subject` on the
+  rubber-part-batch id itself (unlike siblings whose maintenance ops
+  key on a separate maintenance-id) -- see `rubberworks.operation`
+  commit-fact / `rubberworks.governor` hold-fact, both of which set
+  `:subject (:subject request)`, and every op in this scenario passes
+  the batch-id as `:subject`. So a per-batch ledger lookup genuinely
+  reflects that batch's own most recent op outcome -- for batch-1 that
+  is the REJECTED double-shipment attempt (t11), which is why the
+  ground-truth `Shipped`/`Certified` columns below are read directly
+  from the batch record (`:rubber-part-batch-shipped?`/
+  `:material-certified?`), not inferred from this last-fact status."
+  [ledger subject-id]
+  (last (filter #(= (:subject %) subject-id) ledger)))
+
+(defn- status-cell [ledger subject-id]
+  (let [f (last-fact-for ledger subject-id)]
+    (cond
+      (nil? f) "<span class=\"muted\">no activity</span>"
+      (= :committed (:t f)) "<span class=\"ok\">committed</span>"
+      (= :approval-granted (:t f)) "<span class=\"ok\">approved &amp; committed</span>"
+      (= :governor-hold (:t f))
+      (let [rules (map name (:basis f))]
+        (str "<span class=\"critical\">HARD hold &middot; " (esc (str/join ", " rules)) "</span>"))
+      (= :approval-requested (:t f)) "<span class=\"warn\">awaiting approval</span>"
+      :else "<span class=\"muted\">in progress</span>")))
+
+(defn- batch-row [ledger {:keys [id batch-name jurisdiction
+                                  compression-platen-mass-kg sim-peak-compression-force-n
+                                  compression-force-min-n compression-force-max-n
+                                  durometer-deviation-actual-shore-a
+                                  durometer-deviation-min-shore-a
+                                  durometer-deviation-max-shore-a
+                                  rubber-part-batch-defect-unresolved?
+                                  robotics-sim-verified?
+                                  rubber-part-batch-shipped? material-certified?]}]
+  (format (str "        <tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td>"
+               "<td>%s &isin; [%s,%s] N</td>"
+               "<td>%s &isin; [%s,%s] shore-A</td>"
+               "<td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>")
+          (esc id) (esc batch-name) (esc jurisdiction)
+          (esc compression-platen-mass-kg)
+          (esc sim-peak-compression-force-n)
+          (esc compression-force-min-n) (esc compression-force-max-n)
+          (esc durometer-deviation-actual-shore-a)
+          (esc durometer-deviation-min-shore-a) (esc durometer-deviation-max-shore-a)
+          (if rubber-part-batch-defect-unresolved?
+            "<span class=\"err\">unresolved</span>"
+            "<span class=\"ok\">resolved</span>")
+          (if robotics-sim-verified? "<span class=\"ok\">yes</span>" "<span class=\"muted\">no</span>")
+          (str (if rubber-part-batch-shipped? "<span class=\"ok\">shipped</span>" "<span class=\"muted\">not shipped</span>")
+               " / "
+               (if material-certified? "<span class=\"ok\">certified</span>" "<span class=\"muted\">not certified</span>"))
+          (status-cell ledger id)))
+
+(defn- ledger-row [{:keys [t op subject disposition basis]}]
+  (format "        <tr><td>%s</td><td><code>%s</code></td><td>%s</td><td>%s</td></tr>"
+          (esc (name t)) (esc (name (or op :n-a))) (esc subject)
+          (esc (or (some->> basis (map name) (str/join ", ")) (some-> disposition name) ""))))
+
+(defn- draft-row [kind {:strs [record_id batch_id jurisdiction]}]
+  (format "        <tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>"
+          (esc record_id) (esc kind) (esc batch_id) (esc jurisdiction)))
+
+(def ^:private action-gate-rows
+  ;; Static description of this actor's own op contract (README `Ops`
+  ;; table, `rubberworks.governor`/`rubberworks.phase`) --
+  ;; documentation of fixed behavior, not runtime telemetry, so it is
+  ;; legitimately hand-described rather than derived from a live run.
+  ["        <tr><td><code>:rubber-part-batch/intake</code></td><td><span class=\"ok\">auto-commit when clean, phase-3 (the ONLY phase-3 auto op)</span></td></tr>"
+   "        <tr><td><code>:material-spec-rules/verify</code></td><td><span class=\"warn\">human approval (phase-gated, never auto-eligible) &middot; spec-basis independently re-checked -- no product-class requirements ever fabricated</span></td></tr>"
+   "        <tr><td><code>:end-of-line-quality/screen</code></td><td><span class=\"critical\">unresolved dimensional/porosity/flash defect is a HARD, un-overridable hold</span></td></tr>"
+   "        <tr><td><code>:robotics/simulate-compression-set-test</code></td><td><span class=\"warn\">human approval &middot; runs the REAL ASTM D395 compression-set-test-cell <code>physics-2d</code> mission</span></td></tr>"
+   "        <tr><td><code>:actuation/ship-rubber-part-batch</code></td><td><span class=\"warn\">ALWAYS human approval (safety-critical, regardless of confidence) &middot; evidence/robotics-sim/durometer independently re-checked &middot; double-shipment blocked</span></td></tr>"
+   "        <tr><td><code>:actuation/issue-material-certificate</code></td><td><span class=\"warn\">ALWAYS human approval (safety-critical) &middot; end-of-line defect independently re-checked &middot; double-issuance blocked</span></td></tr>"])
+
+(defn render
+  "Renders the full operator-console.html document from a store `db`
+  that has already run `run-demo!` (or any other real scenario)."
+  [db]
+  (let [ledger (vec (store/ledger db))
+        batches (store/all-rubber-part-batches db)
+        batch-rows (str/join "\n" (map (partial batch-row ledger) batches))
+        ledger-rows (str/join "\n" (map ledger-row ledger))
+        shipment-rows (str/join "\n" (map (partial draft-row "rubber-part-batch-shipment-draft")
+                                          (store/shipment-history db)))
+        certificate-rows (str/join "\n" (map (partial draft-row "material-certificate-draft")
+                                             (store/certificate-history db)))]
+    (str
+     "<html><head><meta charset=\"utf-8\"><title>cloud-itonami-isic-2219 &middot; manufacture of other rubber products</title><style>"
+     (jp-go-dds.skin/dds+skin)
+     "</style></head><body>\n"
+     "<header class=\"bar\">\n"
+     "  <h1>Manufacture of other rubber products (ISIC 2219) — Operator Console</h1>\n"
+     "  <span class=\"badge\">read-only sample · governor-gated · shipment/Rubber-Compound-Test-Certificate actuation always human</span>\n"
+     "</header>\n"
+     "<main>\n"
+     "  <section class=\"card\">\n"
+     "    <h2>Rubber-part batches</h2>\n"
+     "    <p class=\"muted\">Demo snapshot — build-time-generated from <code>rubberworks.store</code> via <code>rubberworks.render-html</code> (<code>clojure -M:dev:render-html</code>), regenerated nightly. Compression-force bounds (real <code>physics-2d</code>-simulated telemetry, ADR-2607151600/ADR-2607152000), durometer deviation, and Shipped/Certified are ground truth the governor independently re-derives — never trusted from a proposal's own report.</p>\n"
+     "    <table>\n"
+     "      <thead><tr><th>Batch</th><th>Name</th><th>Product class</th><th>Platen mass (kg)</th><th>Peak compression force</th><th>Durometer deviation</th><th>EOL</th><th>Robotics sim on file</th><th>Shipped / Certified</th><th>Last op status</th></tr></thead>\n"
+     "      <tbody>\n"
+     batch-rows "\n"
+     "      </tbody>\n"
+     "    </table>\n"
+     "  </section>\n"
+     "  <section class=\"card\">\n"
+     "    <h2>Action gate (Compression-Seal Governor)</h2>\n"
+     "    <p class=\"muted\">HARD holds cannot be overridden by any phase or human approval. Rubber-part-batch shipment and Rubber Compound Test Certificate actuation are always a human quality engineer's call, at every phase.</p>\n"
+     "    <table>\n"
+     "      <thead><tr><th>Op</th><th>Gate</th></tr></thead>\n"
+     "      <tbody>\n"
+     (str/join "\n" action-gate-rows) "\n"
+     "      </tbody>\n"
+     "    </table>\n"
+     "  </section>\n"
+     "  <section class=\"card\">\n"
+     "    <h2>Draft shipment / Rubber Compound Test Certificate records</h2>\n"
+     "    <p class=\"muted\">Unsigned drafts (<code>rubberworks.registry</code>) — the plant's own signature/submission is a separate, later act, never performed by this actor.</p>\n"
+     "    <table>\n"
+     "      <thead><tr><th>Record id</th><th>Kind</th><th>Batch</th><th>Jurisdiction</th></tr></thead>\n"
+     "      <tbody>\n"
+     shipment-rows "\n"
+     certificate-rows "\n"
+     "      </tbody>\n"
+     "    </table>\n"
+     "  </section>\n"
+     "  <section class=\"card\">\n"
+     "    <h2>Audit ledger (this run)</h2>\n"
+     "    <p class=\"muted\">Append-only decision-fact log — every proposal, hold and commit this scenario produced.</p>\n"
+     "    <table>\n"
+     "      <thead><tr><th>Fact</th><th>Op</th><th>Subject</th><th>Basis</th></tr></thead>\n"
+     "      <tbody>\n"
+     ledger-rows "\n"
+     "      </tbody>\n"
+     "    </table>\n"
+     "  </section>\n"
+     "</main>\n"
+     "</body></html>\n")))
+
+(defn -main [& args]
+  (let [out (or (first args) "docs/samples/operator-console.html")
+        db (run-demo!)
+        html (render db)]
+    (spit out html)
+    (println "wrote" out "(" (count (store/ledger db)) "ledger facts,"
+             (count (store/shipment-history db)) "shipment drafts,"
+             (count (store/certificate-history db)) "certificate drafts )")))
