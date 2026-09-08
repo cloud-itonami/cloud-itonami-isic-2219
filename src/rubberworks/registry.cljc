@@ -32,7 +32,7 @@
   Certificate itself (that is `rubberworks.operation`'s `:actuation/
   ship-rubber-part-batch`/`:actuation/issue-material-certificate`,
   always human-gated -- see README `Actuation`)."
-  (:require [clojure.string :as str]))
+  (:require [kotoba.lang.text :as str]))
 
 (defn- unsigned-certificate
   "Every certificate this actor produces is UNSIGNED -- signature is the
@@ -90,7 +90,7 @@
     (throw (ex-info "rubber-part-batch-shipment: jurisdiction required" {})))
   (when (< sequence 0)
     (throw (ex-info "rubber-part-batch-shipment: sequence must be >= 0" {})))
-  (let [shipment-number (str (str/upper-case jurisdiction) "-RPS-" (zero-pad sequence 6))
+  (let [shipment-number (str (str/upper jurisdiction) "-RPS-" (zero-pad sequence 6))
         record {"record_id" shipment-number
                 "kind" "rubber-part-batch-shipment-draft"
                 "batch_id" batch-id
@@ -118,7 +118,7 @@
     (throw (ex-info "material-certificate: jurisdiction required" {})))
   (when (< sequence 0)
     (throw (ex-info "material-certificate: sequence must be >= 0" {})))
-  (let [certificate-number (str (str/upper-case jurisdiction) "-RMC-" (zero-pad sequence 6))
+  (let [certificate-number (str (str/upper jurisdiction) "-RMC-" (zero-pad sequence 6))
         record {"record_id" certificate-number
                 "kind" "material-certificate-draft"
                 "batch_id" batch-id
