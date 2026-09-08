@@ -1,5 +1,5 @@
 (ns rubberworks.facts-test
-  (:require [clojure.string :as str]
+  (:require [kotoba.lang.text :as str]
             [clojure.test :refer [deftest is]]
             [rubberworks.facts :as facts]))
 
@@ -41,5 +41,5 @@
   ;; tyres, already implemented separately). Neither product-class
   ;; scheme in this catalog mentions tyres.
   (doseq [scheme (keys facts/catalog)]
-    (is (not (str/includes? (str/lower-case (:name (facts/spec-basis scheme))) "tyre")))
-    (is (not (str/includes? (str/lower-case (:name (facts/spec-basis scheme))) "tire")))))
+    (is (not (str/includes? (str/lower (:name (facts/spec-basis scheme))) "tyre")))
+    (is (not (str/includes? (str/lower (:name (facts/spec-basis scheme))) "tire")))))

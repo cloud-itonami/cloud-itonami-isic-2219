@@ -21,7 +21,7 @@
   map of strings/numbers/vectors only), so a tiny hand-written
   serializer is less friction than adding a new dependency for one CLI
   script."
-  (:require [clojure.string :as str]
+  (:require [kotoba.lang.text :as str]
             [rubberworks.robotics :as robotics]))
 
 (defn- escape-json-string [s]
