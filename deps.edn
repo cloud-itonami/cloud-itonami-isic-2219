@@ -48,11 +48,11 @@
   :dev {:override-deps
         {io.github.kotoba-lang/langchain
          {:local/root "../../kotoba-lang/langchain"}}}
-  ;; clojure -M:dev:run  -> drive the demo through one OperationActor
+  ;; kbb -M:dev:run  -> drive the demo through one OperationActor
   :run {:main-opts ["-m" "rubberworks.sim"]}
   :export {:main-opts ["-m" "rubberworks.export-run"]}
   :render-export {:main-opts ["-m" "rubberworks.render-export"]}
-  ;; clojure -M:dev:render-html -> build docs/samples/operator-console.html
+  ;; kbb -M:dev:render-html -> build docs/samples/operator-console.html
   ;; through the real actor (flagship checklist item 2).
   :render-html {:main-opts ["-m" "rubberworks.render-html"]}
   :test {:extra-paths ["test"]

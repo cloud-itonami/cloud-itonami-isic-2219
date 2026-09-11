@@ -11,7 +11,7 @@
   rubber-specimen's fixed anchor position for its own `:frames`) -- none
   of it is hand-typed/fabricated.
 
-  Usage: clojure -M:dev:render-export
+  Usage: kbb -M:dev:render-export
 
   Writes the SAME JSON to both `/tmp/render-2219/scene-data.json` (for
   a local render harness) and `docs/samples/scene-data.json` (committed
