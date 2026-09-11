@@ -10,7 +10,7 @@
   that drives the REAL actor stack (`rubberworks.operation` ->
   `rubberworks.governor` -> `rubberworks.store`) through a scenario
   adapted from this repo's own `rubberworks.sim` demo driver
-  (`clojure -M:dev:run`, confirmed by reading the driver directly --
+  (`kbb -M:dev:run`, confirmed by reading the driver directly --
   its ids (batch-1..6), ops and violation rule names all match
   `rubberworks.store/demo-data`'s real seed data and
   `rubberworks.governor`'s real check functions; unlike
@@ -30,7 +30,7 @@
   1200.0 N ceiling, `rubberworks.robotics`/ADR-2607151600/ADR-
   2607152000) -- not a hand-typed number.
 
-  Usage: `clojure -M:dev:render-html [out-file]`
+  Usage: `kbb -M:dev:render-html [out-file]`
   (default `docs/samples/operator-console.html`)."
   (:require [jp-go-dds.skin]
             [kotoba.lang.text :as str]

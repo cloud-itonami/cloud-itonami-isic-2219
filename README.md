@@ -193,9 +193,9 @@ Operator console (static sample): `docs/samples/operator-console.html`.
 ## Develop
 
 ```bash
-clojure -M:dev:test
-clojure -M:lint
-clojure -M:dev:run
+kbb -M:dev:test
+kbb -M:lint
+kbb -M:dev:run
 ```
 
 ## License
@@ -214,8 +214,8 @@ Local: open `docs/index.html` or `docs/samples/operator-console.html`.
 ## Export audit package (CLI)
 
 ```bash
-clojure -M:dev:export
-# or: clojure -M:dev:export /tmp/audit-2219
+kbb -M:dev:export
+# or: kbb -M:dev:export /tmp/audit-2219
 ```
 
 Writes CSV files under `out/audit-package/` (or the given directory).
@@ -223,7 +223,7 @@ Writes CSV files under `out/audit-package/` (or the given directory).
 ## Render the real compression-set-test simulation (CLI)
 
 ```bash
-clojure -M:dev:render-export
+kbb -M:dev:render-export
 ```
 
 Runs the REAL `physics-2d` ASTM D395 compression-set-test simulation

@@ -1,5 +1,5 @@
 (ns rubberworks.sim
-  "Demo driver -- `clojure -M:dev:run`. Walks a clean rubber-part-batch
+  "Demo driver -- `kbb -M:dev:run`. Walks a clean rubber-part-batch
   through intake -> material-spec requirements verification -> end-of-
   line-defect screening -> robot compression-set-test-cell verification
   mission -> batch-shipment proposal (always escalates) -> human

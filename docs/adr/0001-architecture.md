@@ -133,8 +133,8 @@ robotics`'s own docstring for the full disclosure.
 
 ## Verification
 
-`clojure -M:dev:test`: 50 tests, 257 assertions, 0 failures, 0 errors.
-`clojure -M:lint`: 0 errors, 0 warnings. `clojure -M:dev:run`: completes
+`kbb -M:dev:test`: 50 tests, 257 assertions, 0 failures, 0 errors.
+`kbb -M:lint`: 0 errors, 0 warnings. `kbb -M:dev:run`: completes
 with no exceptions, exercising every HARD-hold path including the
 genuinely-failing physics-derived over-/under-compression fixtures
 (batch-5: 5.0kg platen mass -> 1600.0N, over its own [300,1200]N band;
