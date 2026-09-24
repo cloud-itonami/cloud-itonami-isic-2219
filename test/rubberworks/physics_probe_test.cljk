@@ -3,7 +3,7 @@
   measures (every run numeric, count = expected), that the numbers come
   from the simulation (the derived band edges really straddle the
   two-sided acceptance band), and that a changed solver would show."
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.test :refer [deftest is testing]]
             [rubberworks.physics-probe :as probe]
             [rubberworks.robotics :as robotics]))
 
