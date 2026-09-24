@@ -21,7 +21,7 @@
   map of strings/numbers/vectors only), so a tiny hand-written
   serializer is less friction than adding a new dependency for one CLI
   script."
-  (:require [kotoba.lang.text :as str]
+  (:require [kotoba.io :as kio] [kotoba.lang.text :as str]
             [rubberworks.robotics :as robotics]))
 
 (defn- escape-json-string [s]
@@ -78,8 +78,8 @@
 (defn -main [& _]
   (let [json (scene-json)]
     (doseq [dir ["/tmp/render-2219" "docs/samples"]]
-      (let [d (java.io.File. (str dir))]
-        (.mkdirs d)
-        (spit (java.io.File. d "scene-data.json") json)))
+      (let [d (kio/file (str dir))]
+        (kio/mkdirs d)
+        (spit (kio/file d "scene-data.json") json)))
     (println "wrote scene-data.json to /tmp/render-2219/ and docs/samples/")
     (println (subs json 0 (min 400 (count json))))))
