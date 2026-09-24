@@ -1,6 +1,6 @@
 (ns rubberworks.facts-test
   (:require [kotoba.lang.text :as str]
-            [clojure.test :refer [deftest is]]
+            [kotoba.test :refer [deftest is]]
             [rubberworks.facts :as facts]))
 
 (deftest automotive-rubber-has-a-spec-basis

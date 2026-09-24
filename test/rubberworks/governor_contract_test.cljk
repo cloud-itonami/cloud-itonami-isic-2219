@@ -23,7 +23,7 @@
   below isolate each rule by construction (batch-3 for durometer alone,
   batch-5/batch-6 for the physics-derived over-/under-compression checks
   alone)."
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.test :refer [deftest is testing]]
             [langgraph.graph :as g]
             [rubberworks.store :as store]
             [rubberworks.operation :as op]))
