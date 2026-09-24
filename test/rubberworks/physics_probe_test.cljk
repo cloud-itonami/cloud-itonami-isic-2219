@@ -1,0 +1,53 @@
+(ns rubberworks.physics-probe-test
+  "The probe is the bot's only source of \"measured\"; these pin that it
+  measures (every run numeric, count = expected), that the numbers come
+  from the simulation (the derived band edges really straddle the
+  two-sided acceptance band), and that a changed solver would show."
+  (:require [clojure.test :refer [deftest is testing]]
+            [rubberworks.physics-probe :as probe]
+            [rubberworks.robotics :as robotics]))
+
+(deftest probe-measures-every-run
+  (let [p (probe/probe)]
+    (is (= "itonami.physical-ai.probe.v1" (:physics-probe/schema p)))
+    (is (pos? (:count p)))
+    (is (= (:count p) (:expected p) (count (:runs p))))
+    (testing "every run carries a numeric force, crush distance and tick count from the trajectory"
+      (doseq [r (:runs p)]
+        (is (number? (get-in r [:quantities :sim-peak-compression-force-n])))
+        (is (number? (get-in r [:quantities :sim-peak-crush-distance-m])))
+        (is (pos? (get-in r [:quantities :ticks])))))))
+
+(deftest force-rises-with-platen-mass-across-the-sweep
+  (let [fs (map #(get-in % [:quantities :sim-peak-compression-force-n]) (:runs (probe/probe)))]
+    (is (apply < fs))))
+
+(deftest sweep-falls-out-of-the-band-on-both-sides
+  (let [outs (mapv :out-of-tolerance? (:runs (probe/probe)))]
+    (is (true? (first outs)) "too light: under-compressed")
+    (is (false? (nth outs 2)) "seed 0.5 kg batch: inside the band")
+    (is (true? (last outs)) "too heavy: over-compressed")))
+
+(defn- out? [grade kg]
+  (let [{:keys [min max]} (robotics/compression-force-band-for grade)]
+    (robotics/rubber-part-batch-compression-force-out-of-tolerance?
+     (merge (robotics/compression-telemetry-for {:compression-platen-mass-kg kg})
+            {:compression-force-min-n min :compression-force-max-n max}))))
+
+(deftest derived-window-straddles-both-band-edges
+  (doseq [grade (keys robotics/compression-force-band-n)]
+    (let [[lo hi] (probe/passing-mass-window-kg grade)]
+      (is (number? lo))
+      (is (number? hi))
+      (is (< lo hi))
+      (testing (str grade ": inside at both edges, outside 1% beyond each")
+        (is (not (out? grade lo)))
+        (is (out? grade (* 0.99 lo)))
+        (is (not (out? grade hi)))
+        (is (out? grade (* 1.01 hi)))))))
+
+(deftest bracket-that-does-not-straddle-answers-nil
+  (is (nil? (probe/mass-at-force-kg 50.0 10.0 50.0 10))))
+
+(deftest upper-bracket-that-does-not-straddle-answers-nil
+  (is (nil? (probe/max-mass-within-force-kg 300.0 10.0 50.0 10))))

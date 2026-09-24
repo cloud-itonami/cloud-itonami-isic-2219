@@ -1,0 +1,112 @@
+(ns rubberworks.physics-probe
+  "The physical-AI bot's measurement: run this actor's REAL `physics-2d`
+  ASTM D395 compression-press simulation (`rubberworks.robotics/
+  simulate-press`) over a fixed sweep and print ONE EDN map of the
+  physical quantities it computed.
+
+    kbb -M:dev:physics
+
+  This is what the resident bot (hermes/profiles/physai-isic-2219/SOUL.md)
+  reads every tick. Every number is derived from a time-stepped trajectory
+  by `rubberworks.robotics`, never typed in. Schema
+  `itonami.physical-ai.probe.v1`:
+
+    {:physics-probe/schema \"itonami.physical-ai.probe.v1\"
+     :repo :procedure :solver
+     :runs    [{:input {...} :quantities {...} :out-of-tolerance? bool} ...]
+     :derived {...}  ; quantities computed ACROSS runs
+     :count n :expected n}
+
+  `:count` is an evidence floor: 0 means \"could not measure\", never
+  \"nothing out of tolerance\". Exit 0 when every run produced numbers,
+  2 when any run did not."
+  (:require [rubberworks.robotics :as robotics]))
+
+(def schema "itonami.physical-ai.probe.v1")
+
+(def sweep-masses-kg
+  "Compression-platen masses swept each tick. 0.1 / 0.5 / 2.0 kg are the
+  seed batches in `rubberworks.store`; 0.2 and 1.0 kg bracket the
+  soft-gasket band edges."
+  [0.1 0.2 0.5 1.0 2.0])
+
+(def sweep-grade
+  "Every run is judged against the soft-gasket band, the band the seed
+  batches carry."
+  :soft-gasket-grade)
+
+(defn- force-at [mass-kg]
+  (:sim-peak-compression-force-n
+   (robotics/compression-telemetry-for {:compression-platen-mass-kg mass-kg})))
+
+(defn- band-fields [grade]
+  (let [{:keys [min max]} (robotics/compression-force-band-for grade)]
+    {:compression-force-min-n min :compression-force-max-n max}))
+
+(defn- run-one [mass-kg]
+  (let [t (robotics/compression-telemetry-for {:compression-platen-mass-kg mass-kg})]
+    {:input (merge {:compression-platen-mass-kg mass-kg :grade sweep-grade} (band-fields sweep-grade))
+     :quantities t
+     :out-of-tolerance? (robotics/rubber-part-batch-compression-force-out-of-tolerance?
+                         (merge t (band-fields sweep-grade)))}))
+
+(defn mass-at-force-kg
+  "Platen mass at which the REAL simulated peak compression force first
+  reaches `target-n`, by bisection over the simulation (force is
+  monotone in mass -- pinned by `physics-probe-test`). nil when the
+  bracket [lo hi] does not straddle `target-n`."
+  ([target-n] (mass-at-force-kg target-n 0.001 50.0 40))
+  ([target-n lo hi iters]
+   (when (and (< (force-at lo) target-n) (>= (force-at hi) target-n))
+     (loop [lo lo hi hi i 0]
+       (if (>= i iters)
+         hi
+         (let [mid (/ (+ lo hi) 2.0)]
+           (if (>= (force-at mid) target-n)
+             (recur lo mid (inc i))
+             (recur mid hi (inc i)))))))))
+
+(defn max-mass-within-force-kg
+  "Heaviest platen mass whose REAL simulated peak compression force stays
+  at or below `limit-n`, by bisection over the simulation. nil when the
+  bracket [lo hi] does not straddle `limit-n`."
+  ([limit-n] (max-mass-within-force-kg limit-n 0.001 50.0 40))
+  ([limit-n lo hi iters]
+   (when (and (<= (force-at lo) limit-n) (> (force-at hi) limit-n))
+     (loop [lo lo hi hi i 0]
+       (if (>= i iters)
+         lo
+         (let [mid (/ (+ lo hi) 2.0)]
+           (if (<= (force-at mid) limit-n)
+             (recur mid hi (inc i))
+             (recur lo mid (inc i)))))))))
+
+(defn passing-mass-window-kg
+  "[lightest heaviest] platen mass whose simulated force lands inside
+  `grade`'s two-sided band: the lightest mass whose force reaches the
+  band min, and the heaviest whose force does not exceed the band max."
+  [grade]
+  (let [{:keys [min max]} (robotics/compression-force-band-for grade)]
+    [(mass-at-force-kg min) (max-mass-within-force-kg max)]))
+
+(defn probe []
+  (let [runs (mapv run-one sweep-masses-kg)
+        numeric? (fn [r] (number? (get-in r [:quantities :sim-peak-compression-force-n])))]
+    {:physics-probe/schema schema
+     :repo "cloud-itonami/cloud-itonami-isic-2219"
+     :procedure "ASTM D395 Method B compression-set / compression-force press test (robot compression-set test cell)"
+     :solver "physics-2d/world-step"
+     :runs runs
+     :derived {:bands (into {} (map (fn [g] [g (robotics/compression-force-band-for g)])
+                                    (keys robotics/compression-force-band-n)))
+               :passing-mass-window-kg (into {} (map (fn [g] [g (passing-mass-window-kg g)])
+                                                     (keys robotics/compression-force-band-n)))}
+     :count (count (filter numeric? runs))
+     :expected (count sweep-masses-kg)}))
+
+(defn -main [& _]
+  (let [p (probe)]
+    (prn p)
+    (when-not (= (:count p) (:expected p))
+      #?(:cljs (set! (.-exitCode js/process) 2)
+         :default (System/exit 2)))))
